@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}",
+            ],
+            "defines": ["__SSE4_2__","__SSE4_1__","__SSE2__"],
+            "compilerPath": "/opt/rh/devtoolset-11/root/usr/bin/g++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
