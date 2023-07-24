@@ -9,25 +9,25 @@
 #include "udf.h"
 #include "types.h"
 #define ALWAYS_INLINE __attribute__((__always_inline__))
+// #define LIKELY(x)   __builtin_expect(!!(x), 1)
+// #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
-#include <bitset>
-
-#include <smmintrin.h>
-#include <nmmintrin.h>
-#include <emmintrin.h>
+#include <nmmintrin.h> //SSE4.2
+#include <smmintrin.h> //SSE4.1
+#include <emmintrin.h> //SSE2
 #define REG_SIZE 16
-
-#ifdef __SSE4_1__
-    #include <smmintrin.h>
-#endif
 
 #ifdef __SSE4_2__
     #include <nmmintrin.h>
 #endif
 
+#ifdef __SSE4_1__
+    #include <smmintrin.h>
+#endif
+
 #ifdef __SSE2__
     #include <emmintrin.h>
-    #define REG_SIZE 16
+    // #define REG_SIZE 16
 #endif
 
 namespace NBSimdBooster{
@@ -850,90 +850,13 @@ using ASCIICaseSensitiveTokenSearcher =    NBSimdBooster::TokenSearcher<ASCIICas
 using ASCIICaseInsensitiveTokenSearcher =  NBSimdBooster::TokenSearcher<ASCIICaseInsensitiveStringSearcher>;
 
 
+
 template <typename T>
 inline int cmp(T a, T b) {
     if (a < b) return -1;
     if (a > b) return 1;
     return 0;
 }
-
-#ifdef __SSE4_2__
-template <typename Char>
-inline int count_char(const Char* a, size_t a_size, const uint8_t b) {
-    size_t offset = 0;
-    uint8_t total = 0;
-    __m128i character_vec = _mm_set1_epi8(b);
-    for (; offset + 16 <= a_size; offset += 16) {
-        uint16_t mask = _mm_movemask_epi8(
-                _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(a + offset)),character_vec));
-        if (mask) {
-            total += _mm_popcnt_u32(mask);
-        }
-    }
-    for(;offset<a_size;++offset){
-        total += a[offset] == b ? 1 : 0; 
-    }
-    return total;
-}
-#else
-template <typename Char>
-inline int count_char(const Char* a, size_t a_size, const uint8_t b) {
-    uint8_t total = 0;
-    for (size_t offset=0; offset < a_size; ++offset){
-        if(a[offset] == b){
-            ++total;
-        }
-    }
-    // size_t offset = 0;
-    // while(offset < a_size){
-    //     total += a[offset] == b ? 1 : 0; 
-    //     offset++;
-    // }
-    return total;
-}
-#endif
-
-
-
-#ifdef __SSE4_2__
-template <typename Char>
-inline int count_numbers(const Char* a, size_t a_size, const Char b) {
-    size_t offset = 0;
-    uint8_t total = 0;
-    __m128i Int_vec = _mm_set1_epi32(b);
-    for (; offset + 16 <= a_size; offset += 16) {
-        // 这里的问题就是在这个_mm_movemask_epi8只能搞8位的掩码，无法生成每32位的一个数值的掩码，所以没办法进行统计
-        // 方法：看看能不能嵌套epi8或者找找其他函数或者每次多loadu几次凑成够长的掩码
-        uint32_t mask = _mm_movemask_epi8(
-                _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(a + offset)),Int_vec));
-        if (mask) {
-            total += _mm_popcnt_u32(mask);
-        }
-    }
-    for(;offset<a_size;++offset){
-        total += a[offset] == b ? 1 : 0; 
-    }
-    return total;
-}
-#else
-template <typename Char>
-inline int count_numbers(const Char* a, size_t a_size, const Char b) {
-    uint8_t total = 0;
-    for (size_t offset=0; offset < a_size; ++offset){
-        if(a[offset] == b){
-            ++total;
-        }
-    }
-    // size_t offset = 0;
-    // while(offset < a_size){
-    //     total += a[offset] == b ? 1 : 0; 
-    //     offset++;
-    // }
-    return total;
-}
-#endif
-
-
 #ifdef __SSE2__
 // Function to compare memory block sizes
 template <typename Char>
@@ -1769,6 +1692,205 @@ inline ALWAYS_INLINE bool sliceHasImplAnyAllImplInt8(
     if (!has_mask && second.size > 15)
         return false;
     return hasAllIntegralLoopRemainder(j, first, second, first_null_map, second_null_map);
+}
+
+// Function to count the nums of char(one bytes) in arrary a
+#ifdef __SSE4_2__
+template <typename Char>
+inline int count_char(const Char* a, size_t a_size, const uint8_t b) {
+    size_t offset = 0;
+    uint8_t total = 0;
+    __m128i character_vec = _mm_set1_epi8(b);
+    for (; offset + 16 <= a_size; offset += 16) {
+        uint16_t mask = _mm_movemask_epi8(
+                _mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(a + offset)),character_vec));
+        if (mask) {
+            total += _mm_popcnt_u32(mask);
+        }
+    }
+    for(;offset<a_size;++offset){
+        total += a[offset] == b ? 1 : 0; 
+    }
+    return total;
+}
+#else
+template <typename Char>
+inline int count_char(const Char* a, size_t a_size, const uint8_t b) {
+    uint8_t total = 0;
+    for (size_t offset=0; offset < a_size; ++offset){
+        if(a[offset] == b){
+            ++total;
+        }
+    }
+    // size_t offset = 0;
+    // while(offset < a_size){
+    //     total += a[offset] == b ? 1 : 0; 
+    //     offset++;
+    // }
+    return total;
+}
+#endif
+
+#ifdef __SSE4_2__
+template <typename Char>
+inline int count_uint16_t(const Char* a, size_t a_size, const Char b) {
+    size_t offset = 0;
+    uint8_t total = 0;
+    __m128i Int_vec = _mm_set1_epi16(b);
+    for (; offset + 8 <= a_size; offset += 8) {
+        uint16_t mask = _mm_movemask_epi8(
+                _mm_cmpeq_epi16(_mm_loadu_si128(reinterpret_cast<const __m128i*>(a + offset)),Int_vec));
+        if (mask) {
+            total += _mm_popcnt_u32(mask)/2;
+        }
+    }
+    for(;offset<a_size;++offset){
+        total += a[offset] == b ? 1 : 0; 
+    }
+    return total;
+}
+#else
+template <typename Char>
+inline int count_uint16_t(const Char* a, size_t a_size, const Char b) {
+    uint8_t total = 0;
+    for (size_t offset=0; offset < a_size; ++offset){
+        if(a[offset] == b){
+            ++total;
+        }
+    }
+    return total;
+}
+#endif
+
+#ifdef __SSE4_2__
+template <typename Char>
+inline int count_uint32_t(const Char* a, size_t a_size, const Char b) {
+    size_t offset = 0;
+    uint8_t total = 0;
+    __m128i Int_vec = _mm_set1_epi32(b);
+    for (; offset + 4 <= a_size; offset += 4) {
+        uint32_t mask = _mm_movemask_epi8(
+                _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(a + offset)),Int_vec));
+        if (mask) {
+            total += _mm_popcnt_u32(mask)/4;
+        }
+    }
+    for(;offset<a_size;++offset){
+        total += a[offset] == b ? 1 : 0; 
+    }
+    return total;
+}
+#else
+template <typename Char>
+inline int count_uint32_t(const Char* a, size_t a_size, const Char b) {
+    uint8_t total = 0;
+    for (size_t offset=0; offset < a_size; ++offset){
+        if(a[offset] == b){
+            ++total;
+        }
+    }
+    return total;
+}
+#endif
+
+#ifdef __SSE4_2__
+template <typename Char>
+inline int count_uint64_t(const Char* a, size_t a_size, const Char b) {
+    size_t offset = 0;
+    uint8_t total = 0;
+    __m128i Int_vec = _mm_set1_epi64x(b);
+    for (; offset + 2 <= a_size; offset += 2) {
+        uint32_t mask = _mm_movemask_epi8(
+                _mm_cmpeq_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i*>(a + offset)),Int_vec));
+        if (mask) {
+            total += _mm_popcnt_u32(mask)/8;
+        }
+    }
+    for(;offset<a_size;++offset){
+        total += a[offset] == b ? 1 : 0; 
+    }
+    return total;
+}
+#else
+template <typename Char>
+inline int count_uint64_t(const Char* a, size_t a_size, const Char b) {
+    uint8_t total = 0;
+    for (size_t offset=0; offset < a_size; ++offset){
+        if(a[offset] == b){
+            ++total;
+        }
+    }
+    return total;
+}
+#endif
+
+template<typename T>
+size_t search_uint16(T* a, T b , const size_t size){
+size_t offset=0;
+#ifdef __SSE4_1__
+    __m128i target_vec =  _mm_set1_epi16(b);
+    for (; offset < size; offset += 4){
+        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(a+offset));
+        __m128i cmp = _mm_cmpeq_epi16(data_vec, target_vec);
+        int mask = _mm_movemask_epi8(cmp);
+        if (mask) {
+            offset += __builtin_ctz(mask) / 2;
+            return offset+1;
+        }  
+    }
+#endif
+    for(; offset < size ; offset++){
+        if (a[offset] == b) return offset + 1;
+    }
+return offset + 1;
+
+}
+
+
+template<typename T>
+size_t search_uint32(T* a, T b , const size_t size){
+size_t offset=0;
+#ifdef __SSE4_1__
+    __m128i target_vec =  _mm_set1_epi32(b);
+    for (; offset < size; offset += 4){
+        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(a+offset));
+        __m128i cmp = _mm_cmpeq_epi32(data_vec, target_vec);
+        int mask = _mm_movemask_epi8(cmp);
+        if (mask) {
+            offset += __builtin_ctz(mask) / 4;
+            return offset+1;
+        }  
+    }
+#endif
+    for(; offset < size ; offset++){
+        if (a[offset] == b) return offset + 1;
+    }
+return offset + 1;
+
+}
+
+
+template<typename T>
+size_t search_uint64(T* a, T b , const size_t size){
+size_t offset=0;
+#ifdef __SSE4_1__
+    __m128i target_vec =  _mm_set1_epi64x(b);
+    for (; offset < size; offset += 2){
+        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(a+offset));
+        __m128i cmp = _mm_cmpeq_epi64(data_vec, target_vec);
+        int mask = _mm_movemask_epi8(cmp);
+        if (mask) 
+        {
+            offset += __builtin_ctz(mask) / 8;
+            return offset+1;
+        }  
+    }
+#endif
+    for(; offset < size ; offset++){
+        if (a[offset] == b) return offset + 1;
+    }
+return offset + 1;
+
 }
 
 }// NBSimdBooster
